@@ -79,12 +79,12 @@ def analyze_indices():
             print(f"✅ {name} triggered alert:\n{msg}\n")
         else:
             print(
-                f"❌ {name} had no significant percent move: {percent_move} or IV percentile: {iv_percentile} alert."
+                f"❌ {name} had no significant percent move: {percent_move:.2f}% or IV percentile: {iv_percentile:.2f} alert."
             )
 
         if not messages:
             messages.append(
-                f"✅ No major move: {percent_move} or IV percentile: {iv_percentile} signal in Nifty or Bank Nifty."
+                f"✅ No major move: {percent_move:.2f}% or IV percentile: {iv_percentile:.2f} signal in Nifty or Bank Nifty."
             )
         return messages
 
