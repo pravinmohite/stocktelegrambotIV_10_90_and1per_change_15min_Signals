@@ -78,12 +78,15 @@ def analyze_indices():
             messages.append(msg)
             print(f"✅ {name} triggered alert:\n{msg}\n")
         else:
-            print(f"❌ {name} had no significant move or IV alert.")
+            print(
+                f"❌ {name} had no significant percent move: {percent_move} or IV percentile: {iv_percentile} alert."
+            )
 
-    if not messages:
-        messages.append(
-            "✅ No major move or IV percentile signal in Nifty or Bank Nifty.")
-    return messages
+        if not messages:
+            messages.append(
+                f"✅ No major move: {percent_move} or IV percentile: {iv_percentile} signal in Nifty or Bank Nifty."
+            )
+        return messages
 
 
 def send_telegram(msg: str):
