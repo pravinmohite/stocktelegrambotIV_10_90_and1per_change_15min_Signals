@@ -38,6 +38,7 @@ def calculate_iv_percentile(
 # Main function to analyze both indices
 def analyze_indices():
     messages = []
+    no_move_data = []  # to collect info for indices without alerts
 
     for name, symbol in indices.items():
         df = yf.download(symbol,
@@ -58,6 +59,10 @@ def analyze_indices():
         move_alert = abs(percent_move) >= 1
         iv_alert = iv_percentile is not None and (iv_percentile <= 10
                                                   or iv_percentile >= 90)
+        # Always show summary line (even if no alert)
+        print(
+            f"ℹ️ {name}: Move={percent_move:.2f}%, IV Percentile={iv_percentile:.2f}"
+        )
 
         # Generate alerts
         if move_alert or iv_alert:
@@ -78,15 +83,21 @@ def analyze_indices():
             messages.append(msg)
             print(f"✅ {name} triggered alert:\n{msg}\n")
         else:
-            print(
-                f"❌ {name} had no significant percent move: {percent_move:.2f}% or IV percentile: {iv_percentile:.2f} alert."
+            no_move_data.append(
+                f"❌ {name}: No major move ({percent_move:.2f}%) or IV alert ({iv_percentile:.2f})."
             )
 
-        if not messages:
-            messages.append(
-                f"✅ No major move: {percent_move:.2f}% or IV percentile: {iv_percentile:.2f} signal in Nifty or Bank Nifty."
-            )
-        return messages
+    # If no alerts triggered at all
+    if not messages:
+        combined = "\n".join(no_move_data)
+        messages.append("✅ No major moves today:\n" + combined)
+    else:
+        # Also include no-move info below alerts, if any
+        if no_move_data:
+            messages.append("ℹ️ Other indices summary:\n" +
+                            "\n".join(no_move_data))
+
+    return messages
 
 
 def send_telegram(msg: str):
