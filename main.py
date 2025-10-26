@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import requests
 import yfinance as yf
 import pandas as pd
@@ -9,6 +10,66 @@ CHAT_ID = '806642925'
 
 # Define index symbols
 indices = {"NIFTY": "^NSEI", "BANKNIFTY": "^NSEBANK"}
+
+# Add a history dict to store last 30 ATM IVs for percentile calculation
+iv_history = {"NIFTY": [], "BANKNIFTY": []}
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept":
+    "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Referer": "https://www.nseindia.com/option-chain",
+    "Connection": "keep-alive"
+}
+
+NSE_OC_URLS = {
+    "NIFTY":
+    "https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY",
+    "BANKNIFTY":
+    "https://www.nseindia.com/api/option-chain-indices?symbol=BANKNIFTY"
+}
+
+
+def calculate_iv_percentile_sensibull(
+        symbol: str) -> Tuple[Optional[float], Optional[float]]:
+    """Fetch ATM IV from NSE option chain and calculate percentile like Sensibull"""
+    session = requests.Session()
+    # Initial request to set cookies
+    session.get("https://www.nseindia.com", headers=HEADERS, timeout=5)
+
+    try:
+        resp = session.get(NSE_OC_URLS[symbol], headers=HEADERS, timeout=5)
+        data = resp.json()
+        spot = data["records"]["underlyingValue"]
+        chain_data = data["records"]["data"]
+
+        strikes, ivs = [], []
+        for item in chain_data:
+            if "CE" in item and "PE" in item:
+                ce_iv = item["CE"]["impliedVolatility"]
+                pe_iv = item["PE"]["impliedVolatility"]
+                strikes.append(item["strikePrice"])
+                ivs.append(np.mean([ce_iv, pe_iv]))
+
+        if not ivs:
+            return None, None
+
+        # Find ATM strike
+        atm_strike = min(strikes, key=lambda x: abs(x - spot))
+        atm_iv = ivs[strikes.index(atm_strike)]
+
+        # Maintain last 30 ATM IVs for percentile
+        iv_list = iv_history[symbol]
+        iv_list.append(atm_iv)
+        if len(iv_list) > 30:
+            iv_list.pop(0)
+
+        percentile = np.sum(np.array(iv_list) < atm_iv) / len(iv_list) * 100
+        return atm_iv, round(percentile, 2)
+
+    except Exception as e:
+        print(f"Error fetching IV for {symbol}: {e}")
+        return None, None
 
 
 # Function to calculate implied volatility percentile (approximated via historical vol)
@@ -53,15 +114,18 @@ def analyze_indices():
         open_price = df["Open"].iloc[-1].item()
         close_price = df["Close"].iloc[-1].item()
         percent_move = ((close_price - open_price) / open_price) * 100
-        iv_percentile, _ = calculate_iv_percentile(symbol)
+        #  iv_percentile, _ = calculate_iv_percentile(symbol)
+        iv_percentile, _ = calculate_iv_percentile_sensibull(
+            "NIFTY" if name == "NIFTY" else "BANKNIFTY")
 
         # Alert conditions
         move_alert = abs(percent_move) >= 1
         iv_alert = iv_percentile is not None and (iv_percentile <= 10
                                                   or iv_percentile >= 90)
         # Always show summary line (even if no alert)
+        iv_percentile_str = f"{iv_percentile:.2f}" if iv_percentile is not None else "N/A"
         print(
-            f"ℹ️ {name}: Move={percent_move:.2f}%, IV Percentile={iv_percentile:.2f}"
+            f"ℹ️ {name}: Move={percent_move:.2f}%, IV Percentile={iv_percentile_str}"
         )
 
         # Generate alerts
@@ -84,7 +148,7 @@ def analyze_indices():
             print(f"✅ {name} triggered alert:\n{msg}\n")
         else:
             no_move_data.append(
-                f"❌ {name}: No major move ({percent_move:.2f}%) or IV alert ({iv_percentile:.2f})."
+                f"❌ {name}: No major move ({percent_move:.2f}%) or IV alert ({iv_percentile_str})."
             )
 
     # If no alerts triggered at all
