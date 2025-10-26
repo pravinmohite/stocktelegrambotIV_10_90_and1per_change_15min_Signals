@@ -29,6 +29,18 @@ NSE_OC_URLS = {
     "https://www.nseindia.com/api/option-chain-indices?symbol=BANKNIFTY"
 }
 
+def fetch_nse_option_chain(symbol: str, retries: int = 3):
+    session = requests.Session()
+    session.get("https://www.nseindia.com", headers=HEADERS, timeout=5)
+    for i in range(retries):
+        try:
+            resp = session.get(NSE_OC_URLS[symbol], headers=HEADERS, timeout=5)
+            if resp.status_code == 200:
+                return resp.json()
+        except:
+            pass
+    return None
+
 
 def calculate_iv_percentile_sensibull(
         symbol: str) -> Tuple[Optional[float], Optional[float]]:
@@ -38,8 +50,9 @@ def calculate_iv_percentile_sensibull(
     session.get("https://www.nseindia.com", headers=HEADERS, timeout=5)
 
     try:
-        resp = session.get(NSE_OC_URLS[symbol], headers=HEADERS, timeout=5)
-        data = resp.json()
+        data = fetch_nse_option_chain(symbol)
+        if data is None:
+            raise Exception("Failed to fetch NSE option chain")
         spot = data["records"]["underlyingValue"]
         chain_data = data["records"]["data"]
 
